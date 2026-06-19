@@ -1,6 +1,7 @@
 #!/bin/bash
-# SSH Brute Force Tester v2.4
+# SSH Brute Force Tester v2.5
 # Usage: ./ssh-brute.sh <ip> <user> [wordlist] [port]
+set -euo pipefail
 
 IP="${1:?Usage: $0 ip user wordlist port}"
 USER="${2:?Usage: $0 ip user wordlist port}"
@@ -8,6 +9,7 @@ WORDLIST_ARG="${3:-all}"
 PORT="${4:-22}"
 LOG="${TMPDIR:-/tmp}/ssh-brute-$(date +%Y%m%d-%H%M%S).log"
 TIMEOUT=300
+CRUNCH_OUTFILE=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -15,10 +17,26 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-log() { echo -e "$1" | tee -a "$LOG"; }
-strip_ansi() { echo "$1" | sed 's/\x1b\[[0-9;]*m//g'; }
+ESC_CHAR=$(printf '\033')
 
-log "${YELLOW}=== SSH Brute Force Tester v2.4 ===${NC}"
+log() { echo -e "$1" | tee -a "$LOG"; }
+strip_ansi() { echo "$1" | sed "s/${ESC_CHAR}\[[0-9;]*m//g"; }
+
+# === Cleanup temp files on exit ===
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
+WL_COMMON="${SCRIPT_DIR}/wordlist.txt"
+WL_KEYBOARD="${SCRIPT_DIR}/wordlist-keyboard.txt"
+WL_ROCKYOU="${SCRIPT_DIR}/wordlist-rockyou-10k.txt"
+WL_MERGED="${TMPDIR:-/tmp}/ssh-brute-merged-$$.txt"
+WL_CRUNCH=""
+
+cleanup() {
+    [ -f "$WL_MERGED" ] && rm -f "$WL_MERGED"
+    [ -n "$WL_CRUNCH" ] && [ -f "$WL_CRUNCH" ] && rm -f "$WL_CRUNCH"
+}
+trap cleanup EXIT
+
+log "${YELLOW}=== SSH Brute Force Tester v2.5 ===${NC}"
 log "Target: ${RED}${IP}:${PORT}${NC}"
 log "User:   ${RED}${USER}${NC}"
 log "Log:    ${LOG}"
@@ -38,17 +56,12 @@ if ! command -v ssh &>/dev/null; then
 fi
 
 # === Wordlist selection ===
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
-WL_COMMON="${SCRIPT_DIR}/wordlist.txt"
-WL_KEYBOARD="${SCRIPT_DIR}/wordlist-keyboard.txt"
-WL_ROCKYOU="${SCRIPT_DIR}/wordlist-rockyou-10k.txt"
-WL_MERGED="${TMPDIR:-/tmp}/ssh-brute-merged.txt"
-
 generate_crunch() {
     local type="$1"
-    local outfile="${TMPDIR:-/tmp}/ssh-brute-crunch-${type}.txt"
+    local outfile="${TMPDIR:-/tmp}/ssh-brute-crunch-${type}-$$.txt"
     if [ -f "$outfile" ] && [ -s "$outfile" ]; then
-        echo "$outfile"
+        WL_CRUNCH="$outfile"
+        CRUNCH_OUTFILE="$outfile"
         return
     fi
     log "${YELLOW}[*] Generating crunch wordlist: ${type}${NC}"
@@ -59,13 +72,14 @@ generate_crunch() {
         exit 1
     fi
     case "$type" in
-        6lower) crunch 6 6 abcdefghijklmnopqrstuvwxyz -o "$outfile" 2>/dev/null ;;
-        6alnum) crunch 6 6 abcdefghijklmnopqrstuvwxyz0123456789 -o "$outfile" 2>/dev/null ;;
-        6digit) crunch 6 6 0123456789 -o "$outfile" 2>/dev/null ;;
-        8digit) crunch 8 8 0123456789 -o "$outfile" 2>/dev/null ;;
+        6lower) crunch 6 6 abcdefghijklmnopqrstuvwxyz -o "$outfile" 2>&1 | grep -v "^Crunch" ;;
+        6alnum) crunch 6 6 abcdefghijklmnopqrstuvwxyz0123456789 -o "$outfile" 2>&1 | grep -v "^Crunch" ;;
+        6digit) crunch 6 6 0123456789 -o "$outfile" 2>&1 | grep -v "^Crunch" ;;
+        8digit) crunch 8 8 0123456789 -o "$outfile" 2>&1 | grep -v "^Crunch" ;;
         *) log "${RED}[!] Unknown crunch type: ${type}${NC}"; exit 1 ;;
     esac
-    echo "$outfile"
+    WL_CRUNCH="$outfile"
+    CRUNCH_OUTFILE="$outfile"
 }
 
 case "$WORDLIST_ARG" in
@@ -80,16 +94,20 @@ case "$WORDLIST_ARG" in
         log "${GREEN}[*] Using rockyou-10k wordlist${NC}"
         ;;
     "crunch 6lower")
-        WORDLIST=$(generate_crunch "6lower")
+        generate_crunch "6lower"
+        WORDLIST="$CRUNCH_OUTFILE"
         ;;
     "crunch 6alnum")
-        WORDLIST=$(generate_crunch "6alnum")
+        generate_crunch "6alnum"
+        WORDLIST="$CRUNCH_OUTFILE"
         ;;
     "crunch 6digit")
-        WORDLIST=$(generate_crunch "6digit")
+        generate_crunch "6digit"
+        WORDLIST="$CRUNCH_OUTFILE"
         ;;
     "crunch 8digit")
-        WORDLIST=$(generate_crunch "8digit")
+        generate_crunch "8digit"
+        WORDLIST="$CRUNCH_OUTFILE"
         ;;
     *)
         WORDLIST="$WORDLIST_ARG"
@@ -139,6 +157,12 @@ if [ "$COUNT" -eq 0 ]; then
     exit 1
 fi
 
+# Auto-scale timeout for large wordlists
+if [ "$COUNT" -gt 100000 ] && [ "$TIMEOUT" -lt $((COUNT / 4 + 60)) ]; then
+    TIMEOUT=$((COUNT / 4 + 60))
+    log "${YELLOW}[*] Large wordlist (${COUNT}): timeout auto-set to ${TIMEOUT}s${NC}"
+fi
+
 # Estimate time
 EST_SEC=$((COUNT / 4))
 EST_MIN=$((EST_SEC / 60))
@@ -152,7 +176,7 @@ elif [ $EST_MIN -gt 0 ]; then
 else
     log "${YELLOW}       Estimated time: ~${EST_SEC}sec${NC}"
 fi
-log "${YELLOW}[3/3] Starting brute force...${NC}"
+log "${YELLOW}[3/3] Starting brute force (timeout ${TIMEOUT}s)...${NC}"
 log ""
 
 # Auto-detect thread count
@@ -166,7 +190,7 @@ FOUND_LINE=""
 HYDRA_EXIT=0
 
 while IFS= read -r line; do
-    if [[ "$line" == *"host:"* ]]; then
+    if [[ "$line" == *"host:"*"login:"*"password:"* ]]; then
         FOUND_LINE="$line"
         log ""
         log "${GREEN}========================================${NC}"

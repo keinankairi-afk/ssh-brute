@@ -97,7 +97,7 @@ crunch 6 8 "abcdefghijklmnopqrstuvwxyz!@#$" -o custom.txt
 ## Output
 
 ```
-=== SSH Brute Force Tester v2.4 ===
+=== SSH Brute Force Tester v2.5 ===
 Target: 192.168.1.1:22
 User:   root
 
