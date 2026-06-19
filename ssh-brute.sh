@@ -1,8 +1,8 @@
 #!/bin/bash
 # SSH Brute Force Tester v2.0
 # Usage: ./ssh-brute.sh <ip> <user> [wordlist] [port]
-# ./ssh-brute.sh 192.168.1.1 root
-# ./ssh-brute.sh 192.168.1.1 admin /path/to/wordlist.txt 2222
+# ./ssh-brute.sh 123.123.1.1 root
+# ./ssh-brute.sh 123.123.1.1 admin /path/to/wordlist.txt 2222
 
 set -euo pipefail
 

