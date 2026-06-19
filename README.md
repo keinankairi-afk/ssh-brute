@@ -37,7 +37,7 @@ Total `all` = 10,527 unique passwords (deduped otomatis).
 
 | Wordlist | Passwords | Size | Time (est.) |
 |----------|-----------|------|-------------|
-| `all` (default) | 10,400 | 85KB | ~45 menit |
+| `all` (default) | 10,527 | 85KB | ~45 menit |
 | `rockyou` | 10,000 | 79KB | ~42 menit |
 | `crunch 6digit` | 1,000,000 | 7MB | ~3 hari |
 | `crunch 6lower` | 308M | 2.1GB | ~1000 jam |
@@ -49,7 +49,7 @@ Total `all` = 10,527 unique passwords (deduped otomatis).
 ## Examples
 
 ```bash
-# Default — all built-in (10,400 passwords, ~45 menit)
+# Default — all built-in (10,527 passwords, ~45 menit)
 ./ssh-brute.sh 192.168.1.1 root
 
 # Rockyou top 10k
