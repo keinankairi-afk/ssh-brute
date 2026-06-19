@@ -23,6 +23,16 @@ chmod +x ssh-brute.sh
 ./ssh-brute.sh <ip> <user> [wordlist] [port]
 ```
 
+## Wordlist Files
+
+| File | Passwords | Description |
+|------|-----------|-------------|
+| `wordlist.txt` | 363 | Common SSH passwords (admin, root, 123456, dll) |
+| `wordlist-keyboard.txt` | 320 | Keyboard patterns (qwerty, asdf, zxcv, dll) |
+| `wordlist-rockyou-10k.txt` | 10,000 | Top 10k passwords dari rockyou leak |
+
+Total `all` = 10,527 unique passwords (deduped otomatis).
+
 ## Wordlists
 
 | Wordlist | Passwords | Size | Time (est.) |
@@ -126,6 +136,24 @@ Log: /tmp/ssh-brute-20260619-190000.log
 - Script auto-detects if target only accepts SSH keys (skips)
 - Use responsibly — only test systems you own or have permission to test
 - For educational/CTF purposes only
+
+## Termux Notes
+
+```bash
+# Install dependencies
+pkg install hydra crunch openssh -y
+
+# Crunch 8 digit butuh ~858MB storage, pastikan HP cukup
+# crunch 6 digit butuh ~7MB, aman untuk semua HP
+
+# Kalau storage kurang, generate ke /sdcard
+crunch 8 8 0123456789 -o /sdcard/crunch8digit.txt
+./ssh-brute.sh <IP> root /sdcard/crunch8digit.txt
+```
+
+- Termux auto-detect: 2 threads (hemat battery)
+- Desktop: 4 threads (full speed)
+- Log file: `/data/data/com.termux/files/usr/tmp/` (Termux) atau `/tmp/` (Linux)
 
 ## License
 
