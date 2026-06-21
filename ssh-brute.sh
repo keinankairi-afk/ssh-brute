@@ -128,7 +128,7 @@ log "${YELLOW}[1/3] Checking password auth on port ${PORT}...${NC}"
 SSH_OUTPUT=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes \
     -o PreferredAuthentications=none -p "$PORT" "$USER@$IP" 2>&1) || true
 
-if [[ "$SSH_OUTPUT" == *"publickey"* ]]; then
+if [[ "$SSH_OUTPUT" == *"publickey"* && "$SSH_OUTPUT" != *"password"* ]]; then
     log "${RED}[!] Target only accepts SSH keys - brute force impossible${NC}"
     exit 1
 elif [[ "$SSH_OUTPUT" == *"Connection refused"* ]]; then
